@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>People Express 經營模擬器 (Web Edition)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .slider-thumb::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased flex flex-col">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-50 px-4 py-3 sm:px-6">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white font-black text-xl">
+                    PE
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white flex items-center gap-2">
+                        People Express 人民航空 經營模擬器
+                        <span class="text-xs bg-blue-500/10 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-full font-mono">v1.0 Web</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">Based on MIT Sloan John Sterman & John Morecroft (1988/2008)</p>
+                </div>
+            </div>
+
+            <!-- Quarter Status & Fast KPI -->
+            <div class="flex items-center gap-4 bg-slate-800/80 px-4 py-2 rounded-xl border border-slate-700 font-mono text-sm">
+                <div class="flex items-center gap-2 text-slate-300">
+                    <span class="text-slate-500 text-xs">季度</span>
+                    <span id="kpiQuarter" class="font-bold text-amber-400 text-base">Y1981 Q1</span>
+                    <span class="text-slate-500 text-xs">(第 <span id="kpiQuarterNum">1</span>/40 季)</span>
+                </div>
+                <div class="h-4 w-px bg-slate-700"></div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500 text-xs">現金</span>
+                    <span id="kpiCash" class="font-bold text-emerald-400">$15.0M</span>
+                </div>
+                <div class="h-4 w-px bg-slate-700"></div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500 text-xs">累計淨利</span>
+                    <span id="kpiCumulativeProfit" class="font-bold text-blue-400">$2.7M</span>
+                </div>
+            </div>
+
+            <!-- Header Actions -->
+            <div class="flex items-center gap-2">
+                <button onclick="resetGame()" class="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold flex items-center gap-1 transition">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> 重置模擬
+                </button>
+                <button onclick="exportCSV()" class="px-3 py-1.5 rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 text-xs font-semibold flex items-center gap-1 transition">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i> 匯出報表
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: Decision Cockpit (4 Cols) -->
+        <section class="lg:col-span-4 flex flex-col gap-5">
+            
+            <!-- Game Over / Alert Banner -->
+            <div id="gameAlertBanner" class="hidden p-4 rounded-2xl border transition-all">
+                <div class="flex items-start gap-3">
+                    <div id="alertIcon" class="mt-0.5"></div>
+                    <div>
+                        <h4 id="alertTitle" class="font-bold text-sm"></h4>
+                        <p id="alertMessage" class="text-xs mt-1 text-slate-300 leading-relaxed"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cockpit Controls Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                        <i data-lucide="sliders" class="w-4 h-4 text-blue-400"></i>
+                        季度策略決策艙 (Cockpit)
+                    </h2>
+                    <span class="text-xs text-slate-500 font-mono">5 大政策控制</span>
+                </div>
+
+                <!-- Strategy Preset Buttons -->
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <button onclick="applyPreset('burr')" class="px-2.5 py-1.5 rounded-lg bg-red-950/40 border border-red-800/50 hover:bg-red-900/40 text-red-300 text-left transition flex flex-col">
+                        <span class="font-bold">激進擴張 (Donald Burr)</span>
+                        <span class="text-[10px] text-red-400/80">降價、瘋狂買機、追隨需求</span>
+                    </button>
+                    <button onclick="applyPreset('balanced')" class="px-2.5 py-1.5 rounded-lg bg-blue-950/40 border border-blue-800/50 hover:bg-blue-900/40 text-blue-300 text-left transition flex flex-col">
+                        <span class="font-bold">穩健擴張 (Balanced)</span>
+                        <span class="text-[10px] text-blue-400/80">注重服務聲譽與員工負荷</span>
+                    </button>
+                </div>
+
+                <!-- Decision Input 1: Peoples Fare -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-slate-300 flex items-center gap-1">
+                            1. 票價 (Peoples Fare)
+                            <span class="text-slate-500 font-normal">($/seat-mile)</span>
+                        </span>
+                        <span class="font-mono font-bold text-blue-400 text-sm" id="valFare">$0.090</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="adjustValue('fare', -0.005)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">-</button>
+                        <input type="range" id="inputFare" min="0.04" max="0.25" step="0.005" value="0.09" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none slider-thumb">
+                        <button onclick="adjustValue('fare', 0.005)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">+</button>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>$0.04 (極致超廉航)</span>
+                        <span>對手平均: <span id="compFareLabel">$0.16</span></span>
+                        <span>$0.25 (高價)</span>
+                    </div>
+                </div>
+
+                <!-- Decision Input 2: Aircraft Purchases -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-slate-300 flex items-center gap-1">
+                            2. 購機/賣機 (Aircraft Purchases)
+                            <span class="text-slate-500 font-normal">(架/季)</span>
+                        </span>
+                        <span class="font-mono font-bold text-amber-400 text-sm" id="valPlanes">+2 架</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="adjustValue('planes', -1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">-</button>
+                        <input type="range" id="inputPlanes" min="-5" max="15" step="1" value="2" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none slider-thumb">
+                        <button onclick="adjustValue('planes', 1)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">+</button>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>-5 (出售機隊)</span>
+                        <span>注意: 交付延遲 2 季</span>
+                        <span>+15 (急速擴張)</span>
+                    </div>
+                </div>
+
+                <!-- Decision Input 3: Staff Hiring -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-slate-300 flex items-center gap-1">
+                            3. 招募/資遣人員 (Staff Hiring)
+                            <span class="text-slate-500 font-normal">(人/季)</span>
+                        </span>
+                        <span class="font-mono font-bold text-emerald-400 text-sm" id="valHiring">+50 人</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="adjustValue('hiring', -10)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">-</button>
+                        <input type="range" id="inputHiring" min="-100" max="300" step="10" value="50" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none slider-thumb">
+                        <button onclick="adjustValue('hiring', 10)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">+</button>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>-100 (裁員)</span>
+                        <span>新手培訓需 1 季</span>
+                        <span>+300 (大量培訓)</span>
+                    </div>
+                </div>
+
+                <!-- Decision Input 4: Marketing Fraction -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-slate-300 flex items-center gap-1">
+                            4. 行銷預算比例 (Marketing / Revenue)
+                        </span>
+                        <span class="font-mono font-bold text-indigo-400 text-sm" id="valMarketing">8.0%</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="adjustValue('marketing', -0.01)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">-</button>
+                        <input type="range" id="inputMarketing" min="0.0" max="0.25" step="0.01" value="0.08" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none slider-thumb">
+                        <button onclick="adjustValue('marketing', 0.01)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">+</button>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>0% (無行銷)</span>
+                        <span>基準: 8%</span>
+                        <span>25% (密集宣傳)</span>
+                    </div>
+                </div>
+
+                <!-- Decision Input 5: Service Scope -->
+                <div class="space-y-1.5">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-semibold text-slate-300 flex items-center gap-1">
+                            5. 目標服務範疇 (Service Scope)
+                        </span>
+                        <span class="font-mono font-bold text-purple-400 text-sm" id="valScope">0.30</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="adjustValue('scope', -0.05)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">-</button>
+                        <input type="range" id="inputScope" min="0.0" max="1.0" step="0.05" value="0.30" class="w-full h-1.5 bg-slate-800 rounded-lg appearance-none slider-thumb">
+                        <button onclick="adjustValue('scope', 0.05)" class="w-7 h-7 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">+</button>
+                    </div>
+                    <div class="flex justify-between text-[10px] text-slate-500">
+                        <span>0.0 (純廉航無餐飲)</span>
+                        <span>0.3 (PE基準模式)</span>
+                        <span>1.0 (全套傳統服務)</span>
+                    </div>
+                </div>
+
+                <!-- Run Simulation Action -->
+                <div class="pt-2 flex flex-col gap-2">
+                    <button id="btnRunQuarter" onclick="runNextQuarter()" class="w-full py-3.5 px-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] text-white font-bold rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 text-base transition">
+                        <i data-lucide="play" class="w-5 h-5 fill-current"></i>
+                        推進下一季 (Run Quarter)
+                    </button>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <button onclick="runMultipleQuarters(4)" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 font-medium transition">
+                            自動前進 1 年 (4 季)
+                        </button>
+                        <button onclick="runMultipleQuarters(12)" class="py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 font-medium transition">
+                            自動前進 3 年 (12 季)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Operations Diagnostic Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl text-xs space-y-3">
+                <h3 class="font-bold text-slate-300 flex items-center gap-2">
+                    <i data-lucide="gauge" class="w-4 h-4 text-emerald-400"></i>
+                    營運健康即時診斷 (Diagnostics)
+                </h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                        <div class="text-slate-400 text-[11px]">員工平均每週工時</div>
+                        <div class="font-mono text-base font-bold text-slate-100 mt-1 flex items-baseline gap-1">
+                            <span id="diagWorkHours">40.0</span> <span class="text-xs text-slate-500">小時</span>
+                        </div>
+                        <div id="diagWorkHoursStatus" class="text-[10px] text-emerald-400 mt-0.5">負荷正常</div>
+                    </div>
+                    <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                        <div class="text-slate-400 text-[11px]">員工士氣指數</div>
+                        <div class="font-mono text-base font-bold text-slate-100 mt-1 flex items-baseline gap-1">
+                            <span id="diagMorale">1.00</span>
+                        </div>
+                        <div id="diagMoraleStatus" class="text-[10px] text-emerald-400 mt-0.5">高昂</div>
+                    </div>
+                    <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                        <div class="text-slate-400 text-[11px]">實際服務交付品質</div>
+                        <div class="font-mono text-base font-bold text-slate-100 mt-1 flex items-baseline gap-1">
+                            <span id="diagQuality">1.00</span>
+                        </div>
+                        <div id="diagQualityStatus" class="text-[10px] text-emerald-400 mt-0.5">優質</div>
+                    </div>
+                    <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                        <div class="text-slate-400 text-[11px]">累積服務聲譽 (口碑)</div>
+                        <div class="font-mono text-base font-bold text-slate-100 mt-1 flex items-baseline gap-1">
+                            <span id="diagReputation">1.00</span>
+                        </div>
+                        <div id="diagReputationStatus" class="text-[10px] text-emerald-400 mt-0.5">極佳</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Column: Graphs, Dashboards & Financial Reports (8 Cols) -->
+        <section class="lg:col-span-8 flex flex-col gap-5">
+            
+            <!-- Summary Metric Cards (4 Cards) -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
+                    <div class="text-xs text-slate-400 flex items-center justify-between">
+                        <span>機隊規模</span>
+                        <i data-lucide="plane" class="w-4 h-4 text-blue-400"></i>
+                    </div>
+                    <div class="font-mono font-bold text-xl text-slate-100 mt-1.5" id="cardPlanes">10 <span class="text-xs text-slate-500 font-normal">架</span></div>
+                    <div class="text-[11px] text-slate-500 mt-1" id="cardASM">486 M ASM</div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
+                    <div class="text-xs text-slate-400 flex items-center justify-between">
+                        <span>載客率 (Load Factor)</span>
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-amber-400"></i>
+                    </div>
+                    <div class="font-mono font-bold text-xl text-amber-400 mt-1.5" id="cardLoadFactor">68.0%</div>
+                    <div class="text-[11px] text-slate-500 mt-1">平衡線: <span id="cardBreakeven">55.0%</span></div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
+                    <div class="text-xs text-slate-400 flex items-center justify-between">
+                        <span>當季營業額</span>
+                        <i data-lucide="dollar-sign" class="w-4 h-4 text-emerald-400"></i>
+                    </div>
+                    <div class="font-mono font-bold text-xl text-emerald-400 mt-1.5" id="cardRevenue">$29.7M</div>
+                    <div class="text-[11px] text-slate-500 mt-1">成本: <span id="cardExpenses">$27.1M</span></div>
+                </div>
+
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-lg">
+                    <div class="text-xs text-slate-400 flex items-center justify-between">
+                        <span>當季淨利 / 股價</span>
+                        <i data-lucide="trending-up" class="w-4 h-4 text-indigo-400"></i>
+                    </div>
+                    <div class="font-mono font-bold text-xl text-indigo-400 mt-1.5" id="cardNetIncome">+$2.65M</div>
+                    <div class="text-[11px] text-slate-500 mt-1">市價: <span id="cardStock">$12.0</span></div>
+                </div>
+            </div>
+
+            <!-- Tab Switcher for Charts vs Detailed Financial Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex-1 flex flex-col">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <button id="tabBtnCharts" onclick="switchView('charts')" class="px-3.5 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold transition">
+                            動態趨勢圖表 (Charts)
+                        </button>
+                        <button id="tabBtnTable" onclick="switchView('table')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 text-xs font-semibold transition">
+                            財務與營運損益表 (Income Statement)
+                        </button>
+                        <button id="tabBtnCausal" onclick="switchView('causal')" class="px-3.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-400 text-xs font-semibold transition">
+                            系統反饋因果圖 (Causal Loop)
+                        </button>
+                    </div>
+                    <span class="text-xs text-slate-500 font-mono">MIT System Dynamics</span>
+                </div>
+
+                <!-- VIEW 1: Charts Section -->
+                <div id="viewCharts" class="space-y-6">
+                    <!-- Chart Row 1: Fleet & Load Factor -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+                                <span>機隊規模 vs. 員工人數 (Scale)</span>
+                                <span class="text-[10px] text-slate-500 font-normal">左軸: 架數 | 右軸: 人數</span>
+                            </h4>
+                            <div class="h-52">
+                                <canvas id="chartScale"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+                                <span>載客率 vs. 損益平衡線 (Capacity Utilization)</span>
+                                <span class="text-[10px] text-slate-500 font-normal">%</span>
+                            </h4>
+                            <div class="h-52">
+                                <canvas id="chartLoadFactor"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chart Row 2: Financials & Intangibles -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+                                <span>營收、總成本與淨利 (Financials)</span>
+                                <span class="text-[10px] text-slate-500 font-normal">百萬美元 ($M)</span>
+                            </h4>
+                            <div class="h-52">
+                                <canvas id="chartFinancials"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+                                <span>無形資產：士氣、服務聲譽與工時 (Intangible Assets)</span>
+                                <span class="text-[10px] text-slate-500 font-normal">指數 (1.0為基準)</span>
+                            </h4>
+                            <div class="h-52">
+                                <canvas id="chartIntangibles"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 2: Data Table Section -->
+                <div id="viewTable" class="hidden overflow-x-auto flex-1 max-h-[500px]">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-slate-950 text-slate-400 font-mono uppercase text-[10px] sticky top-0">
+                            <tr>
+                                <th class="p-2 border-b border-slate-800">季度</th>
+                                <th class="p-2 border-b border-slate-800 text-right">飛機</th>
+                                <th class="p-2 border-b border-slate-800 text-right">員工</th>
+                                <th class="p-2 border-b border-slate-800 text-right">工時</th>
+                                <th class="p-2 border-b border-slate-800 text-right">士氣</th>
+                                <th class="p-2 border-b border-slate-800 text-right">聲譽</th>
+                                <th class="p-2 border-b border-slate-800 text-right">載客率</th>
+                                <th class="p-2 border-b border-slate-800 text-right">平衡率</th>
+                                <th class="p-2 border-b border-slate-800 text-right">票價</th>
+                                <th class="p-2 border-b border-slate-800 text-right">營收</th>
+                                <th class="p-2 border-b border-slate-800 text-right">成本</th>
+                                <th class="p-2 border-b border-slate-800 text-right">淨利</th>
+                                <th class="p-2 border-b border-slate-800 text-right">現金</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="font-mono divide-y divide-slate-800/60">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- VIEW 3: Causal Loop Diagram Explanation -->
+                <div id="viewCausal" class="hidden space-y-4 text-xs text-slate-300 leading-relaxed">
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                        <h4 class="font-bold text-sm text-blue-400 mb-2">People Express 系統動力學核心反饋機制 (System Feedback Dynamics)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                            <div class="border border-slate-800/80 p-3 rounded-lg bg-slate-900/40">
+                                <h5 class="font-bold text-amber-400 text-xs mb-1">迴路 R1: 機隊與增長正反饋 (Reinforcing Loop)</h5>
+                                <p class="text-slate-400 text-[11px]">低票價 $\rightarrow$ 激發市場巨大客運需求 $\rightarrow$ 載客率上升 $\rightarrow$ 營收大增 $\rightarrow$ 再度擴大購機訂單 $\rightarrow$ 運能進一步暴增。</p>
+                            </div>
+                            <div class="border border-slate-800/80 p-3 rounded-lg bg-slate-900/40">
+                                <h5 class="font-bold text-red-400 text-xs mb-1">迴路 B1: 服務產能過載調節 (Underinvestment Trap)</h5>
+                                <p class="text-slate-400 text-[11px]">飛機交付快於人員招募與培訓 $\rightarrow$ 員工工時大幅飆升超載 $\rightarrow$ 士氣低落、離職率上升 $\rightarrow$ 服務品質嚴重惡化 $\rightarrow$ 損害服務聲譽。</p>
+                            </div>
+                            <div class="border border-slate-800/80 p-3 rounded-lg bg-slate-900/40">
+                                <h5 class="font-bold text-purple-400 text-xs mb-1">迴路 B2: 顧客流失負反饋 (Reputation Erosion)</h5>
+                                <p class="text-slate-400 text-[11px]">口碑破壞需要時間延遲擴散 $\rightarrow$ 一旦聲譽跌破門檻，顧客迅速轉移 $\rightarrow$ 實質載客量暴跌 $\rightarrow$ 跌破損益平衡載客率 $\rightarrow$ 現金流枯竭崩潰。</p>
+                            </div>
+                            <div class="border border-slate-800/80 p-3 rounded-lg bg-slate-900/40">
+                                <h5 class="font-bold text-cyan-400 text-xs mb-1">迴路 B3: 傳統航空巨頭反制 (Competitor Retaliation)</h5>
+                                <p class="text-slate-400 text-[11px]">當 People Express 規模威脅產業巨頭（American/United） $\rightarrow$ 對手導入電腦訂位差別定價（Yield Management） $\rightarrow$ 抹平低價優勢。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 px-6 py-4 text-center text-xs text-slate-500 bg-slate-950">
+        People Express Management Flight Simulator (Web Architecture Prototype) &bull; Originated by Prof. John Sterman (MIT Sloan) & Strategy Dynamics
+    </footer>
+
+    <!-- Scripts -->
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
